@@ -80,6 +80,9 @@ const fileFilter = (req, file, cb) => {
 
 const upload = multer({ storage, fileFilter })
 
+app.get("/", (req, res) => {
+  res.send("API running");
+});
 
 
 
