@@ -1,142 +1,60 @@
-const express=require('express')
-const mongoose=require('mongoose')
-const dotenv=require('dotenv')
-dotenv.config();
+const express = require("express")
+const mongoose = require("mongoose")
+const dotenv = require("dotenv")
 
+const routeHandler=require('./routes/pdf.js')
 
-const app=express()
+dotenv.config()
+
+const app = express()
+
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
+app.set("view engine", "ejs")
+app.set("views", "views")
+app.use(routeHandler)
 
-mongoose.connect(process.env.MONGO_URL)
-.then(() => console.log("database connected"))
-.catch(err => console.log(err));
+/* =======================
+   MongoDB Connection
+======================= */
+mongoose
+  .connect(process.env.MONGO_URL)
+  .then(() => console.log("Database connected"))
+  .catch(err => console.log(err))
 
-
-
-
-const folderSchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: true,
-      unique: true,
-      trim: true
-    },
-    files: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "File"
-      }
-    ]
-  },
-  { timestamps: true }
-)
-
-const Folder = mongoose.model("Folder", folderSchema)
+/* =======================
+   Static Folder
+======================= */
+app.use("/uploads", express.static("uploads"))
 
 
-const fileSchema = new mongoose.Schema(
-  {
-    originalName: String,
-    fileName: String,
-    filePath: String,
-    fileType: {
-      type: String,
-      enum: ["pdf"],
-      default: "pdf"
-    },
-    folder: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Folder",
-      required: true
-    }
-  },
-  { timestamps: true }
-)
 
-const File = mongoose.model("File", fileSchema)
+/* =======================
+   Multer Config
+======================= */
 
-
-const multer = require("multer")
-const path = require("path")
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "uploads/")
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname))
-  }
+/* =======================
+   Routes
+======================= */
+app.get("/", (req, res) => {
+  res.send("API running")
 })
 
-const fileFilter = (req, file, cb) => {
-  if (file.mimetype === "application/pdf") {
-    cb(null, true)
-  } else {
-    cb(new Error("Only PDF allowed"), false)
-  }
-}
-
-const upload = multer({ storage, fileFilter })
-
-app.get("/", (req, res) => {
-  res.send("API running");
-});
 
 
 
-app.post(
-  "/upload_pdf",
-  upload.single("pdf"),
-  async (req, res) => {
-    try {
-      const { folderName } = req.body
+/* =======================
+   Error Handler
+======================= */
+app.use((err, req, res, next) => {
+  return res.status(400).json({ error: err.message })
+})
 
-      if (!folderName) {
-        return res.status(400).json({ message: "folderName is required" })
-      }
+/* =======================
+   Server
+======================= */
+app.listen(3000, () => {
+  console.log("Server running on port 3000")
+})
 
-      if (!req.file) {
-        return res.status(400).json({ message: "PDF file is required" })
-      }
-
-     
-      let folder = await Folder.findOne({
-        name: folderName.trim()
-      })
-
-    
-      if (!folder) {
-        folder = await Folder.create({
-          name: folderName.trim()
-        })
-      }
-
-     
-      const file = await File.create({
-        originalName: req.file.originalname,
-        fileName: req.file.filename,
-        filePath: req.file.path,
-        folder: folder._id
-      })
-
-     
-      await Folder.findByIdAndUpdate(folder._id, {
-        $push: { files: file._id }
-      })
-
-      res.status(201).json({
-        message: "PDF uploaded successfully",
-        folder: folder.name,
-        file
-      })
-
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  }
-)
-
-
-module.exports=app;
+module.exports = app
